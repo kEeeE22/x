@@ -14,6 +14,8 @@ from utils.toolkit import target2onehot, tensor2numpy
 from utils.concept1_utils.infer import infer_gen
 from utils.concept1_utils.utils import SyntheticImageFolder, init_synthetic_images
 
+dataset_name = 'etc_256'
+
 #distill hyperparameters
 distill_lr = 0.01
 first_bn_multiplier = 1.0
@@ -28,12 +30,12 @@ ipc=10
 #incremental learning hyperparameters
 batch_size = 128
 num_workers = 4
-init_epoch = 150
+init_epoch = 2
 init_lr = 0.001
 init_milestones = [60, 80]
 init_lr_decay = 0.1
 init_weight_decay = 0.0005
-epochs = 150
+epochs = 2
 lrate = 0.001
 milestones = [60, 80]
 lrate_decay = 0.1
@@ -72,7 +74,7 @@ class concept1(BaseLearner):
         )
         syn_dataset = SyntheticImageFolder(
             syn_root="./syn",
-            dataset_name="cifar100",
+            dataset_name=dataset_name,
             known_classes=self._known_classes,
             cur_task=self._cur_task,
             transform=transforms.Compose([*data_manager._train_trsf, *data_manager._common_trsf])
@@ -291,7 +293,7 @@ class concept1(BaseLearner):
                 ipc_init=ipc_init, 
                 init_inputs=init_inputs,
                 store_best_images = True,
-                dataset_name='cifar100')
+                dataset_name=dataset_name)
             
             # self.synthetic_data.extend(syn)
             # self.ufc.extend(aufc)

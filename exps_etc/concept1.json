@@ -8,7 +8,7 @@
     "init_cls": 3,
     "increment": 3,
     "model_name": "concept1",
-    "convnet_type": "etc_cnn",
+    "convnet_type": "etc_cnn_0_1",
     "device": ["0"],
     "seed": [1993]
 }
