@@ -278,7 +278,7 @@ class concept1(BaseLearner):
         init_inputs = init_synthetic_images(
             num_class=self._total_classes,
             dataset=train_dataset,
-            dataset_name='cifar100',
+            dataset_name=dataset_name,
             init_path='./syn',
             known_classes=self._known_classes
         )
