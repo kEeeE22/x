@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
-from utils.data import iCIFAR10, iCIFAR100, iImageNet100, iImageNet1000, iCIFAR10_AA, iCIFAR100_AA
+from utils.data import iCIFAR10, iCIFAR100, iImageNet100, iImageNet1000, iCIFAR10_AA, iCIFAR100_AA, iETC256
 from tqdm import tqdm
 import torch
 
@@ -291,6 +291,8 @@ def _get_idata(dataset_name):
         return iCIFAR100_AA()
     elif name == "cifar10_aa":
         return iCIFAR10_AA()
+    elif name == "etc_256":
+        return iETC256()
     else:
         raise NotImplementedError("Unknown dataset {}.".format(dataset_name))
 
