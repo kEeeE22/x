@@ -1,0 +1,14 @@
+{
+    "prefix": "reproduce",
+    "dataset": "etc_256",
+    "memory_size": 2000,
+    "memory_per_class": 20,
+    "fixed_memory": false,
+    "shuffle": true,
+    "init_cls": 0,
+    "increment": 3,
+    "model_name": "der",
+    "convnet_type": "etc_cnn",
+    "device": ["0"],
+    "seed": [1993]
+}
