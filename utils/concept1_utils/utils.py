@@ -21,13 +21,21 @@ def clip_image(image_tensor, dataset: str) -> torch.Tensor:
     elif dataset == 'etc_256':
         mean = np.array([0.5])
         std = np.array([0.5])
-    print(image_tensor.shape)
+    c = image_tensor.shape[1]
     mean = torch.tensor(mean, device=image_tensor.device).view(1, -1, 1, 1)
     std = torch.tensor(std, device=image_tensor.device).view(1, -1, 1, 1)
 
+    if mean.shape[1] == 1 and c > 1:
+        mean = mean.repeat(1, c, 1, 1)
+        std = std.repeat(1, c, 1, 1)
+    elif mean.shape[1] != c:
+        # nếu mismatch (vd: mean=3 nhưng ảnh=1) → chỉ lấy kênh đầu
+        mean = mean[:, :c, :, :]
+        std = std[:, :c, :, :]
+
+    # --- phần clip an toàn ---
     min_val = (-mean / std).expand_as(image_tensor)
     max_val = ((1 - mean) / std).expand_as(image_tensor)
-
     image_tensor = torch.max(torch.min(image_tensor, max_val), min_val)
     return image_tensor
 
@@ -48,13 +56,21 @@ def denormalize_image(image_tensor, dataset: str) -> torch.Tensor:
     elif dataset == 'etc_256':
         mean = np.array([0.5])
         std = np.array([0.5])
-    n_channels = image_tensor.shape[1]
+    c = image_tensor.shape[1]
     mean = torch.tensor(mean, device=image_tensor.device).view(1, -1, 1, 1)
     std = torch.tensor(std, device=image_tensor.device).view(1, -1, 1, 1)
 
+    if mean.shape[1] == 1 and c > 1:
+        mean = mean.repeat(1, c, 1, 1)
+        std = std.repeat(1, c, 1, 1)
+    elif mean.shape[1] != c:
+        # nếu mismatch (vd: mean=3 nhưng ảnh=1) → chỉ lấy kênh đầu
+        mean = mean[:, :c, :, :]
+        std = std[:, :c, :, :]
+
+    # --- phần clip an toàn ---
     min_val = (-mean / std).expand_as(image_tensor)
     max_val = ((1 - mean) / std).expand_as(image_tensor)
-
     image_tensor = torch.max(torch.min(image_tensor, max_val), min_val)
     return image_tensor
 
