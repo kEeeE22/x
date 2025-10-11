@@ -21,7 +21,7 @@ def clip_image(image_tensor, dataset: str) -> torch.Tensor:
     elif dataset == 'etc_256':
         mean = np.array([0.5])
         std = np.array([0.5])
-    n_channels = image_tensor.shape[1]
+    print(image_tensor.shape)
     mean = torch.tensor(mean, device=image_tensor.device).view(1, -1, 1, 1)
     std = torch.tensor(std, device=image_tensor.device).view(1, -1, 1, 1)
 
