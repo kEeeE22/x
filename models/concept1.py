@@ -40,7 +40,7 @@ lrate = 0.001
 milestones = [60, 80]
 lrate_decay = 0.1
 weight_decay = 2e-4
-
+T=2
 
 class concept1(BaseLearner):
     def __init__(self, args):
@@ -186,8 +186,12 @@ class concept1(BaseLearner):
                 logits = self._network(inputs)["logits"]
 
                 loss_clf = F.cross_entropy(logits, targets)
-
-                loss = loss_clf
+                loss_kd = _KD_loss(
+                    logits[:, : self._known_classes],
+                    self._old_network(inputs)["logits"],
+                    T,
+                )
+                loss = loss_clf + loss_kd
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -341,3 +345,8 @@ class concept1(BaseLearner):
         print(f"   → Total synthetic samples generated this task: {total_syn_count}")
         # print(f"   → Cumulative synthetic data length: {len(self.synthetic_data)}")
         # print(f"   → Cumulative aufc length: {len(self.ufc)}\n")
+
+def _KD_loss(pred, soft, T):
+    pred = torch.log_softmax(pred / T, dim=1)
+    soft = torch.softmax(soft / T, dim=1)
+    return -1 * torch.mul(soft, pred).sum() / pred.shape[0]
