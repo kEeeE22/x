@@ -46,6 +46,7 @@ class concept1(BaseLearner):
     def __init__(self, args):
         super().__init__(args)
         self._network = IncrementalNet(args, False)
+        self._old_network2 = None
         self.model_list = []
 
     def after_task(self):
