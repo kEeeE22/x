@@ -245,3 +245,35 @@ def init_synthetic_images(num_class, dataset, dataset_name, init_path, known_cla
 
         init_inputs[class_id] = input_original.detach().clone()
     return init_inputs
+
+def _cleanup_synthetic_folder(self):
+        """Giữ lại đúng số ảnh mỗi class theo samples_per_class."""
+        import os
+        import shutil
+
+        syn_root = "./syn"
+        keep_per_class = self.samples_per_class
+        if not os.path.exists(syn_root):
+            return
+
+        total_deleted = 0
+        for class_dir in sorted(os.listdir(syn_root)):
+            if not class_dir.startswith("new"):
+                continue
+            class_path = os.path.join(syn_root, class_dir)
+            if not os.path.isdir(class_path):
+                continue
+
+            jpg_files = sorted(
+                [f for f in os.listdir(class_path) if f.endswith(".jpg")]
+            )
+            if len(jpg_files) > keep_per_class:
+                to_delete = jpg_files[keep_per_class:]
+                for f in to_delete:
+                    try:
+                        os.remove(os.path.join(class_path, f))
+                        total_deleted += 1
+                    except Exception as e:
+                        print(f"[WARN] Could not delete {f}: {e}")
+
+        print(f"🧹 Cleaned synthetic folder: kept {keep_per_class} per class, deleted {total_deleted} extra files.")

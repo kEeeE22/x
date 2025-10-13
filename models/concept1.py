@@ -53,6 +53,8 @@ class concept1(BaseLearner):
         self._known_classes = self._total_classes
         logging.info("Exemplar size: {}".format(self.exemplar_size))
 
+        self._cleanup_synthetic_folder()
+
     def incremental_train(self, data_manager):
         self._cur_task += 1
         self._total_classes = self._known_classes + data_manager.get_task_size(
@@ -98,7 +100,7 @@ class concept1(BaseLearner):
         if len(self._multiple_gpus) > 1:
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
-        self.generate_synthetic_data(ipc, train_dataset)
+        self.generate_synthetic_data(self.samples_per_class, train_dataset)
         self._construct_exemplar_random(data_manager, 10)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
@@ -253,8 +255,39 @@ class concept1(BaseLearner):
                 else exemplar_targets
             )
     
+    def _cleanup_synthetic_folder(self):
+        """Giữ lại đúng số ảnh mỗi class theo samples_per_class."""
+        import os
+        import shutil
+
+        syn_root = "./syn"
+        keep_per_class = self.samples_per_class
+        if not os.path.exists(syn_root):
+            return
+
+        total_deleted = 0
+        for class_dir in sorted(os.listdir(syn_root)):
+            if not class_dir.startswith("new"):
+                continue
+            class_path = os.path.join(syn_root, class_dir)
+            if not os.path.isdir(class_path):
+                continue
+
+            jpg_files = sorted(
+                [f for f in os.listdir(class_path) if f.endswith(".jpg")]
+            )
+            if len(jpg_files) > keep_per_class:
+                to_delete = jpg_files[keep_per_class:]
+                for f in to_delete:
+                    try:
+                        os.remove(os.path.join(class_path, f))
+                        total_deleted += 1
+                    except Exception as e:
+                        print(f"[WARN] Could not delete {f}: {e}")
+
+        print(f"🧹 Cleaned synthetic folder: kept {keep_per_class} per class, deleted {total_deleted} extra files.")
     def generate_synthetic_data(self, ipc, train_dataset):   
-        print('Generating synthetic data...')
+        print(f"Generating synthetic data... (ipc={ipc}, total_classes={self._total_classes})")
 
         ipc_init = int(ipc / M / self._total_classes)
         ipc_end = ipc_init * (M + 1)
