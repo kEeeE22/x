@@ -50,6 +50,7 @@ class concept1(BaseLearner):
 
     def after_task(self):
         self._old_network = self._network.copy().freeze()
+        self._old_network2 = self._network.copy().freeze()
         self._known_classes = self._total_classes
         logging.info("Exemplar size: {}".format(self.exemplar_size))
 
@@ -99,13 +100,14 @@ class concept1(BaseLearner):
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
         self.generate_synthetic_data(self.samples_per_class, train_dataset)
-        self._construct_exemplar_random(data_manager, 10)
+        # self._construct_exemplar_random(data_manager, 10)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
 
     def _train(self, train_loader, test_loader):
         self._network.to(self._device)
-
+        if self._old_network2 is not None:
+            self._old_network2.to(self._device)
         if self._cur_task == 0:
             optimizer = optim.SGD(
                 self._network.parameters(),
@@ -188,7 +190,7 @@ class concept1(BaseLearner):
                 loss_clf = F.cross_entropy(logits, targets)
                 loss_kd = _KD_loss(
                     logits[:, : self._known_classes],
-                    self._old_network(inputs)["logits"],
+                    self._old_network2(inputs)["logits"],
                     T,
                 )
                 loss = loss_clf + loss_kd

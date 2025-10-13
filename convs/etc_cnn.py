@@ -154,6 +154,7 @@ class ETC_CNN_0_1(nn.Module):
         self.conv5 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, padding='same')
         self.relu5 = nn.ReLU()
         self.conv6 = nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, padding='same')
+        self.bn2 = nn.BatchNorm2d(16)
         self.relu6 = nn.ReLU()
         self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.drop3 = nn.Dropout(0.25)
@@ -175,7 +176,7 @@ class ETC_CNN_0_1(nn.Module):
         x = self.drop2(x)
 
         x = F.relu(self.conv5(x))
-        x = F.relu(self.conv6(x))
+        x = F.relu(self.bn2(self.conv6(x)))
         x = self.pool3(x)
         x = self.drop3(x)
 
