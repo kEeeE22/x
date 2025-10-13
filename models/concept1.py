@@ -66,13 +66,11 @@ class concept1(BaseLearner):
         logging.info(
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
-        appendent = self._get_memory()
 
         base_dataset = data_manager.get_dataset(
             np.arange(self._known_classes, self._total_classes),
             source="train",
             mode="train",
-            appendent=appendent,
         )
         syn_dataset = SyntheticImageFolder(
             syn_root="./syn",
