@@ -93,9 +93,10 @@ class iCaRL_winfer(BaseLearner):
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
 
-        self.model_list.append(self._network)
         if self._old_network2 is not None:
-            self.model_list.append(self._old_network2)
+            self.model_list = [self._network, self._old_network2]
+        else: 
+            self.model_list = [self._network]
         self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr =distill_lr, dataset_name=dataset_name)
         
         self.build_rehearsal_memory(data_manager, self.samples_per_class)

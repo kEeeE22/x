@@ -84,7 +84,7 @@ class Finetune_winfer(BaseLearner):
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
 
-        self.model_list.append(self._network)
+        self.model_list = [self._network]
         self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr=distill_lr, dataset_name=dataset_name)
         
         if len(self._multiple_gpus) > 1:
