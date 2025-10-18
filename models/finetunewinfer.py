@@ -1,18 +1,16 @@
 import logging
 import numpy as np
-from tqdm import tqdm
 import torch
 from torch import nn
+from torch.serialization import load
+from tqdm import tqdm
 from torch import optim
 from torch.nn import functional as F
-from torch.utils.data import DataLoader, ConcatDataset
-from torchvision import transforms
-from models.base import BaseLearner
+from torch.utils.data import DataLoader
 from utils.inc_net import IncrementalNet
-from utils.inc_net import CosineIncrementalNet
+from models.base import BaseLearner
 from utils.toolkit import target2onehot, tensor2numpy
-from utils.concept1_utils.utils import SyntheticImageFolder
-EPSILON = 1e-8
+
 
 init_epoch = 200
 init_lr = 0.1
@@ -21,14 +19,13 @@ init_lr_decay = 0.1
 init_weight_decay = 0.0005
 
 
-epochs = 170
+epochs = 80
 lrate = 0.1
-milestones = [80, 120]
+milestones = [40, 70]
 lrate_decay = 0.1
 batch_size = 128
 weight_decay = 2e-4
 num_workers = 8
-T = 2
 
 #distill params
 ipc=10
@@ -37,17 +34,13 @@ distill_epochs=201
 distill_lr=0.01
 dataset_name="etc_256"
 
-class iCaRL_winfer(BaseLearner):
+class Finetune(BaseLearner):
     def __init__(self, args):
         super().__init__(args)
         self._network = IncrementalNet(args, False)
-        self._old_network2 = None
 
     def after_task(self):
-        self._old_network = self._network.copy().freeze()
-        self._old_network2 = self._network.copy().freeze()
         self._known_classes = self._total_classes
-        logging.info("Exemplar size: {}".format(self.exemplar_size))
 
     def incremental_train(self, data_manager):
         self._cur_task += 1
@@ -59,25 +52,11 @@ class iCaRL_winfer(BaseLearner):
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
 
-        base_dataset = data_manager.get_dataset(
+        train_dataset = data_manager.get_dataset(
             np.arange(self._known_classes, self._total_classes),
             source="train",
             mode="train",
-            appendent=self._get_memory(),
         )
-        syn_dataset = SyntheticImageFolder(
-            syn_root="./syn",
-            dataset_name=dataset_name,
-            known_classes=self._known_classes,
-            cur_task=self._cur_task,
-            transform=transforms.Compose([*data_manager._train_trsf, *data_manager._common_trsf])
-        )
-        if len(syn_dataset) > 0:
-            train_dataset = ConcatDataset([base_dataset, syn_dataset])
-            print(f"Combined real + synthetic datasets: {len(base_dataset)} real, {len(syn_dataset)} synthetic samples.")
-        else:
-            train_dataset = base_dataset
-            print("No synthetic data found. Using only real samples.")
         self.train_loader = DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
         )
@@ -91,16 +70,12 @@ class iCaRL_winfer(BaseLearner):
         if len(self._multiple_gpus) > 1:
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
-        self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr =distill_lr, dataset_name=dataset_name)
-        self.build_rehearsal_memory(data_manager, self.samples_per_class)
+        self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr=distill_lr, dataset_name=dataset_name)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
 
     def _train(self, train_loader, test_loader):
         self._network.to(self._device)
-        if self._old_network2 is not None:
-            self._old_network2.to(self._device)
-
         if self._cur_task == 0:
             optimizer = optim.SGD(
                 self._network.parameters(),
@@ -171,6 +146,7 @@ class iCaRL_winfer(BaseLearner):
         logging.info(info)
 
     def _update_representation(self, train_loader, test_loader, optimizer, scheduler):
+
         prog_bar = tqdm(range(epochs))
         for _, epoch in enumerate(prog_bar):
             self._network.train()
@@ -180,14 +156,12 @@ class iCaRL_winfer(BaseLearner):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
                 logits = self._network(inputs)["logits"]
 
-                loss_clf = F.cross_entropy(logits, targets)
-                loss_kd = _KD_loss(
-                    logits[:, : self._known_classes],
-                    self._old_network2(inputs)["logits"],
-                    T,
+                fake_targets = targets - self._known_classes
+                loss_clf = F.cross_entropy(
+                    logits[:, self._known_classes :], fake_targets
                 )
 
-                loss = loss_clf + loss_kd
+                loss = loss_clf
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -220,9 +194,3 @@ class iCaRL_winfer(BaseLearner):
                 )
             prog_bar.set_description(info)
         logging.info(info)
-
-
-def _KD_loss(pred, soft, T):
-    pred = torch.log_softmax(pred / T, dim=1)
-    soft = torch.softmax(soft / T, dim=1)
-    return -1 * torch.mul(soft, pred).sum() / pred.shape[0]
