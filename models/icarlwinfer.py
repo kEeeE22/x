@@ -42,7 +42,6 @@ class iCaRL_winfer(BaseLearner):
         super().__init__(args)
         self._network = IncrementalNet(args, False)
         self._old_network2 = None
-
     def after_task(self):
         self._old_network = self._network.copy().freeze()
         self._old_network2 = self._network.copy().freeze()
@@ -55,8 +54,8 @@ class iCaRL_winfer(BaseLearner):
             self._cur_task
         )
         self._network.update_fc(self._total_classes)
-        if self._old_network is not None:
-            self._old_network.update_fc(self._total_classes)
+        if self._old_network2 is not None:
+            self._old_network2.update_fc(self._total_classes)
         logging.info(
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
@@ -93,7 +92,12 @@ class iCaRL_winfer(BaseLearner):
         if len(self._multiple_gpus) > 1:
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
+
+        self.model_list.append(self._network)
+        if self._old_network2 is not None:
+            self.model_list.append(self._old_network2)
         self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr =distill_lr, dataset_name=dataset_name)
+        
         self.build_rehearsal_memory(data_manager, self.samples_per_class)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
@@ -185,7 +189,7 @@ class iCaRL_winfer(BaseLearner):
                 loss_clf = F.cross_entropy(logits, targets)
                 loss_kd = _KD_loss(
                     logits[:, : self._known_classes],
-                    self._old_network2(inputs)["logits"],
+                    self._old_network(inputs)["logits"],
                     T,
                 )
 

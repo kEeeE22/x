@@ -22,6 +22,8 @@ class BaseLearner(object):
         self._total_classes = 0
         self._network = None
         self._old_network = None
+        self._old_network2 = None
+        self.model_list = []
         self._data_memory, self._targets_memory = np.array([]), np.array([])
         self.topk = 3
 
@@ -419,10 +421,10 @@ class BaseLearner(object):
             ipc_init = int(ipc / M / self._total_classes)
             ipc_end = ipc_init * (M + 1)
             
-            self.model_list = []
-            self.model_list.append(self._network)
-            if self._old_network is not None:
-                self.model_list.append(self._old_network)
+            # self.model_list = []
+            # self.model_list.append(self._network)
+            # if self._old_network2 is not None:
+            #     self.model_list.append(self._old_network2)
             for model in self.model_list:
                 model.eval()
                 model.to("cuda")

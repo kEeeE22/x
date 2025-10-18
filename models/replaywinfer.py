@@ -33,7 +33,7 @@ T = 2
 
 #distill params
 ipc=10
-M=2 
+M=1 
 distill_epochs=201
 distill_lr=0.01 
 dataset_name="etc_256"
@@ -42,7 +42,6 @@ class Replay_winfer(BaseLearner):
     def __init__(self, args):
         super().__init__(args)
         self._network = IncrementalNet(args, False)
-
     def after_task(self):
         self._known_classes = self._total_classes
         logging.info("Exemplar size: {}".format(self.exemplar_size))
@@ -53,8 +52,6 @@ class Replay_winfer(BaseLearner):
             self._cur_task
         )
         self._network.update_fc(self._total_classes)
-        if self._old_network is not None:
-            self._old_network.update_fc(self._total_classes)
         logging.info(
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
@@ -92,7 +89,10 @@ class Replay_winfer(BaseLearner):
         if len(self._multiple_gpus) > 1:
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
+
+        self.model_list.append(self._network)
         self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr=distill_lr, dataset_name=dataset_name)
+        
         self.build_rehearsal_memory(data_manager, self.samples_per_class)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
