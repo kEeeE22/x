@@ -1,17 +1,19 @@
 import logging
 import numpy as np
+from tqdm import tqdm
 import torch
 from torch import nn
-from torch.serialization import load
-from tqdm import tqdm
 from torch import optim
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, ConcatDataset
 from torchvision import transforms
-from utils.inc_net import IncrementalNet
 from models.base import BaseLearner
+from utils.inc_net import IncrementalNet
 from utils.toolkit import target2onehot, tensor2numpy
+
 from utils.concept1_utils.utils import SyntheticImageFolder
+EPSILON = 1e-8
+
 
 init_epoch = 200
 init_lr = 0.1
@@ -20,28 +22,30 @@ init_lr_decay = 0.1
 init_weight_decay = 0.0005
 
 
-epochs = 80
+epochs = 70
 lrate = 0.1
-milestones = [40, 70]
+milestones = [30, 50]
 lrate_decay = 0.1
 batch_size = 128
 weight_decay = 2e-4
-num_workers = 8
+num_workers = 4
+T = 2
 
 #distill params
 ipc=10
-M=2
+M=2 
 distill_epochs=201
-distill_lr=0.01
+distill_lr=0.01 
 dataset_name="etc_256"
 
-class Finetune_winfer(BaseLearner):
+class Replay_winfer(BaseLearner):
     def __init__(self, args):
         super().__init__(args)
         self._network = IncrementalNet(args, False)
 
     def after_task(self):
         self._known_classes = self._total_classes
+        logging.info("Exemplar size: {}".format(self.exemplar_size))
 
     def incremental_train(self, data_manager):
         self._cur_task += 1
@@ -54,6 +58,8 @@ class Finetune_winfer(BaseLearner):
         logging.info(
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
+
+        # Loader
         base_dataset = data_manager.get_dataset(
             np.arange(self._known_classes, self._total_classes),
             source="train",
@@ -82,10 +88,12 @@ class Finetune_winfer(BaseLearner):
             test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
         )
 
+        # Procedure
         if len(self._multiple_gpus) > 1:
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
         self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr=distill_lr, dataset_name=dataset_name)
+        self.build_rehearsal_memory(data_manager, self.samples_per_class)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
 
@@ -161,7 +169,6 @@ class Finetune_winfer(BaseLearner):
         logging.info(info)
 
     def _update_representation(self, train_loader, test_loader, optimizer, scheduler):
-
         prog_bar = tqdm(range(epochs))
         for _, epoch in enumerate(prog_bar):
             self._network.train()
@@ -171,11 +178,7 @@ class Finetune_winfer(BaseLearner):
                 inputs, targets = inputs.to(self._device), targets.to(self._device)
                 logits = self._network(inputs)["logits"]
 
-                fake_targets = targets - self._known_classes
-                loss_clf = F.cross_entropy(
-                    logits[:, self._known_classes :], fake_targets
-                )
-
+                loss_clf = F.cross_entropy(logits, targets)
                 loss = loss_clf
 
                 optimizer.zero_grad()
@@ -183,6 +186,7 @@ class Finetune_winfer(BaseLearner):
                 optimizer.step()
                 losses += loss.item()
 
+                # acc
                 _, preds = torch.max(logits, dim=1)
                 correct += preds.eq(targets.expand_as(preds)).cpu().sum()
                 total += len(targets)

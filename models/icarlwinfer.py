@@ -55,6 +55,8 @@ class iCaRL_winfer(BaseLearner):
             self._cur_task
         )
         self._network.update_fc(self._total_classes)
+        if self._old_network is not None:
+            self._old_network.update_fc(self._total_classes)
         logging.info(
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
