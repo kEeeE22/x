@@ -7,6 +7,8 @@ from torch.utils.data import DataLoader
 from utils.toolkit import tensor2numpy, accuracy
 from scipy.spatial.distance import cdist
 import os
+from utils.concept1_utils.utils import init_synthetic_images
+from utils.concept1_utils.infer import infer_gen
 
 EPSILON = 1e-8
 batch_size = 64
@@ -290,7 +292,6 @@ class BaseLearner(object):
         )
         _class_means = np.zeros((self._total_classes, self.feature_dim))
 
-        # Calculate the means of old classes with newly trained network
         for class_idx in range(self._known_classes):
             mask = np.where(self._targets_memory == class_idx)[0]
             class_data, class_targets = (
@@ -311,7 +312,6 @@ class BaseLearner(object):
 
             _class_means[class_idx, :] = mean
 
-        # Construct exemplars for new classes and calculate the means
         for class_idx in range(self._known_classes, self._total_classes):
             data, targets, class_dset = data_manager.get_dataset(
                 np.arange(class_idx, class_idx + 1),
@@ -327,29 +327,28 @@ class BaseLearner(object):
             vectors = (vectors.T / (np.linalg.norm(vectors.T, axis=0) + EPSILON)).T
             class_mean = np.mean(vectors, axis=0)
 
-            # Select
             selected_exemplars = []
             exemplar_vectors = []
             for k in range(1, m + 1):
                 S = np.sum(
                     exemplar_vectors, axis=0
-                )  # [feature_dim] sum of selected exemplars vectors
-                mu_p = (vectors + S) / k  # [n, feature_dim] sum to all vectors
+                )
+                mu_p = (vectors + S) / k
                 i = np.argmin(np.sqrt(np.sum((class_mean - mu_p) ** 2, axis=1)))
 
                 selected_exemplars.append(
                     np.array(data[i])
-                )  # New object to avoid passing by inference
+                )
                 exemplar_vectors.append(
                     np.array(vectors[i])
-                )  # New object to avoid passing by inference
+                )
 
                 vectors = np.delete(
                     vectors, i, axis=0
-                )  # Remove it to avoid duplicative selection
+                )
                 data = np.delete(
                     data, i, axis=0
-                )  # Remove it to avoid duplicative selection
+                )
 
             selected_exemplars = np.array(selected_exemplars)
             exemplar_targets = np.full(m, class_idx)
@@ -382,3 +381,92 @@ class BaseLearner(object):
             _class_means[class_idx, :] = mean
 
         self._class_means = _class_means
+
+    # def _cleanup_synthetic_folder(self):
+    #         """Giữ lại đúng số ảnh mỗi class theo samples_per_class."""
+    #         import os
+    #         import shutil
+
+    #         syn_root = "./syn"
+    #         keep_per_class = self.samples_per_class
+    #         if not os.path.exists(syn_root):
+    #             return
+
+    #         total_deleted = 0
+    #         for class_dir in sorted(os.listdir(syn_root)):
+    #             if not class_dir.startswith("new"):
+    #                 continue
+    #             class_path = os.path.join(syn_root, class_dir)
+    #             if not os.path.isdir(class_path):
+    #                 continue
+
+    #             jpg_files = sorted(
+    #                 [f for f in os.listdir(class_path) if f.endswith(".jpg")]
+    #             )
+    #             if len(jpg_files) > keep_per_class:
+    #                 to_delete = jpg_files[keep_per_class:]
+    #                 for f in to_delete:
+    #                     try:
+    #                         os.remove(os.path.join(class_path, f))
+    #                         total_deleted += 1
+    #                     except Exception as e:
+    #                         print(f"[WARN] Could not delete {f}: {e}")
+
+    #         print(f"🧹 Cleaned synthetic folder: kept {keep_per_class} per class, deleted {total_deleted} extra files.")
+    def generate_synthetic_data(self, ipc, train_dataset, M=2, distill_epochs=201, distill_lr=0.01, dataset_name="etc_256"):   
+            print(f"Generating synthetic data... (ipc={ipc}, total_classes={self._total_classes})")
+
+            ipc_init = int(ipc / M / self._total_classes)
+            ipc_end = ipc_init * (M + 1)
+            
+            self.model_list = []
+            self.model_list.append(self._network)
+            if self._old_network is not None:
+                self.model_list.append(self._old_network)
+            for model in self.model_list:
+                model.eval()
+                model.to("cuda")
+
+            torch.cuda.empty_cache()
+            #debug
+            print(f"[DEBUG] Task {self._cur_task}: model_list contains {len(self.model_list)} model(s)")
+            for idx, model in enumerate(self.model_list):
+                model_name = type(model).__name__
+                print(f"   - Model[{idx}]: {model_name} | device={next(model.parameters()).device}")
+
+            total_syn_count = 0
+            init_inputs = init_synthetic_images(
+                num_class=self._total_classes,
+                dataset=train_dataset,
+                dataset_name=dataset_name,
+                init_path='./syn',
+                known_classes=self._known_classes
+            )
+            for ipc_id in range(ipc):
+                syn= infer_gen(
+                    model_lists = self.model_list, 
+                    ipc_id = ipc_id, 
+                    num_class = self._total_classes, 
+                    iteration = distill_epochs, 
+                    lr = distill_lr,  
+                    init_path='./syn', 
+                    ipc_init=ipc_init, 
+                    init_inputs=init_inputs,
+                    store_best_images = True,
+                    dataset_name=dataset_name)
+                
+                # self.synthetic_data.extend(syn)
+                # self.ufc.extend(aufc)
+                
+                #debug 
+                syn_count = len(syn) if syn is not None else 0
+                total_syn_count += syn_count
+            if self._old_network is not None:
+                self._old_network.to('cpu')
+                torch.cuda.empty_cache()
+            #     print(f"   🔄 [DEBUG] Added {syn_count} synthetic samples and {aufc_count} activation features.")
+            #     print(f"   📊 [DEBUG] Current totals → syn: {len(self.synthetic_data)}, aufc: {len(self.ufc)}")
+            # print("\n✅ [DEBUG] Synthetic data generation complete.")
+            print(f"   → Total synthetic samples generated this task: {total_syn_count}")
+            # print(f"   → Cumulative synthetic data length: {len(self.synthetic_data)}")
+            # print(f"   → Cumulative aufc length: {len(self.ufc)}\n")

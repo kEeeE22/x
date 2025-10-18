@@ -24,7 +24,7 @@ jitter = 0
 ipc_start = 0
 M = 2
 distill_batch_size = 64
-distill_epochs = 400
+distill_epochs = 101
 ipc=10
 
 #incremental learning hyperparameters
@@ -125,7 +125,7 @@ class concept1(BaseLearner):
                 self._network.parameters(),
                 lr=lrate,
                 momentum=0.9,
-                weight_decay=weight_decay,
+                # weight_decay=weight_decay,
             )  # 1e-5
             scheduler = optim.lr_scheduler.MultiStepLR(
                 optimizer=optimizer, milestones=milestones, gamma=lrate_decay
@@ -321,7 +321,7 @@ class concept1(BaseLearner):
             known_classes=self._known_classes
         )
         for ipc_id in range(ipc):
-            syn= infer_gen(
+            syn = infer_gen(
                 model_lists = self.model_list, 
                 ipc_id = ipc_id, 
                 num_class = self._total_classes, 

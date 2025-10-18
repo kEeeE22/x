@@ -78,7 +78,6 @@ def infer_gen(
         uni_perb = torch.zeros_like(input_original, requires_grad=True, device="cuda", dtype=torch.float)
         optimizer = optim.Adam([uni_perb], lr=lr, betas=(0.5, 0.9), eps=1e-8)
         lr_scheduler = lr_cosine_policy(lr, 0, iteration)
-        best_inputs, best_cost = None, 1e4
 
         for it in range(iteration):
             lr_scheduler(optimizer, it, it)
