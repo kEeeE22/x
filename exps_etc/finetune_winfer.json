@@ -1,13 +1,13 @@
 {
-    "prefix": "reproduce",
+    "prefix": "finetune",
     "dataset": "etc_256",
     "memory_size": 200,
-    "memory_per_class": 15,
+    "memory_per_class": 20,
     "fixed_memory": false,
     "shuffle": true,
     "init_cls": 3,
     "increment": 3,
-    "model_name": "icarl",
+    "model_name": "finetunewinfer",
     "convnet_type": "etc_cnn_0_1",
     "device": ["0"],
     "seed": [1993]
