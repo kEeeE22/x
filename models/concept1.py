@@ -75,7 +75,7 @@ class concept1(BaseLearner):
             mode="train",
         )
         syn_dataset = SyntheticImageFolder(
-            syn_root="./syn",
+            syn_root="./syn/combined",
             dataset_name=dataset_name,
             known_classes=self._known_classes,
             cur_task=self._cur_task,
@@ -189,13 +189,13 @@ class concept1(BaseLearner):
                 logits = self._network(inputs)["logits"]
 
                 loss_clf = F.cross_entropy(logits, targets)
-                loss_kd = _KD_loss(
-                    logits[:, : self._known_classes],
-                    self._old_network2(inputs)["logits"],
-                    T,
-                )
-                loss = loss_clf + loss_kd
-
+                # loss_kd = _KD_loss(
+                #     logits[:, : self._known_classes],
+                #     self._old_network2(inputs)["logits"],
+                #     T,
+                # )
+                # loss = loss_clf + loss_kd
+                loss = loss_clf
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()

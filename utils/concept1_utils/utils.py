@@ -4,6 +4,8 @@ from PIL import Image
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
+from torchvision.utils import save_image
+
 def clip_image(image_tensor, dataset: str) -> torch.Tensor:
     """
     adjust the input w.r.t mean and variance
@@ -222,26 +224,58 @@ class SyntheticImageFolder(Dataset):
         # trả về theo format DataManager expects
         return idx, img, class_id
     
-def init_synthetic_images(num_class, dataset, dataset_name, init_path, known_classes):
-    init_inputs = {}
-    for class_id in range(num_class):
-        is_old_class = class_id < known_classes
-        if is_old_class:
-            jpg_dir = f"{init_path}/new{class_id:03d}"
-            if os.path.exists(jpg_dir) and len(os.listdir(jpg_dir)) > 0:
-                jpg_file = sorted(os.listdir(jpg_dir))[0]
-                img_path = os.path.join(jpg_dir, jpg_file)
-                img = Image.open(img_path).convert("L" if dataset_name == "etc_256" else "RGB")
-                input_original = transforms.ToTensor()(img).unsqueeze(0).to("cuda")
-                print(f"[OLD] Loaded synthetic init for class {class_id} from {img_path}")
-            else:
-                print(f"[WARN] Missing jpg for class {class_id}, fallback random init")
-                _, img, _ = dataset[random.randint(0, len(dataset) - 1)]
-                input_original = img.unsqueeze(0).to("cuda")
-        else:
-            _, img, _ = dataset[random.randint(0, len(dataset) - 1)]
-            input_original = img.unsqueeze(0).to("cuda")
-            print(f"[NEW] Random init for class {class_id}")
 
-        init_inputs[class_id] = input_original.detach().clone()
-    return init_inputs
+def init_synthetic_images(num_class, dataset, dataset_name, init_path, known_classes, cur_task):
+    """
+    Khởi tạo cho DISTILL:
+      - Load hoặc tạo ảnh gốc (base)
+      - Cộng tổng nhiễu từ các task trước (không tính task hiện tại)
+    Trả về:
+      base_inputs[class_id]: ảnh gốc sạch
+      noise_inputs[class_id]: tổng nhiễu của class đó
+    """
+    base_inputs = {}
+    noise_inputs = {}
+
+    base_dir = f"{init_path}/base"
+    noise_dir = f"{init_path}/noise"
+
+    # Lấy dataset thật nếu là ConcatDataset
+    if hasattr(dataset, 'datasets'):
+        real_dataset = dataset.datasets[0]
+    else:
+        real_dataset = dataset
+
+    for class_id in range(num_class):
+        base_path = f"{base_dir}/class{class_id:03d}_base.jpg"
+
+        # --- 1️⃣ Load hoặc tạo ảnh base
+        if os.path.exists(base_path):
+            img = Image.open(base_path).convert("L" if dataset_name == "etc_256" else "RGB")
+            base_img = transforms.ToTensor()(img).unsqueeze(0).to("cuda")
+        else:
+            # chọn ảnh thật đúng class nếu có
+            class_indices = [i for i, (_, _, lbl) in enumerate(real_dataset) if lbl == class_id]
+            if len(class_indices) > 0:
+                idx = random.choice(class_indices)
+                _, img, _ = real_dataset[idx]
+                print(f"[BASE] Created base image for class {class_id} from real idx={idx}")
+            else:
+                _, img, _ = real_dataset[random.randint(0, len(real_dataset) - 1)]
+                print(f"[WARN] No real sample for class {class_id}, random fallback.")
+            base_img = img.unsqueeze(0).to("cuda")
+            os.makedirs(os.path.dirname(base_path), exist_ok=True)
+            save_image(base_img, base_path)
+        
+        base_inputs[class_id] = base_img.detach().clone()
+
+        # --- 2️⃣ Cộng nhiễu từ các task trước
+        total_noise = torch.zeros_like(base_img)
+        for t in range(1, cur_task):
+            noise_path = f"{noise_dir}/task{t:02d}/class{class_id:03d}_noise.pt"
+            if os.path.exists(noise_path):
+                total_noise += torch.load(noise_path, map_location="cuda")
+        
+        noise_inputs[class_id] = total_noise.detach().clone()
+
+    return base_inputs, noise_inputs
