@@ -228,11 +228,12 @@ class SyntheticImageFolder(Dataset):
 def init_synthetic_images(num_class, dataset, dataset_name, init_path, known_classes, cur_task):
     """
     Khởi tạo cho DISTILL:
-      - Load hoặc tạo ảnh gốc (base)
-      - Cộng tổng nhiễu từ các task trước (không tính task hiện tại)
+      - Load hoặc tạo ảnh base (base image)
+      - Nếu class cũ (class_id < known_classes) → load noise từ file .pt gần nhất
+      - Nếu class mới (class_id >= known_classes) → noise = 0
     Trả về:
       base_inputs[class_id]: ảnh gốc sạch
-      noise_inputs[class_id]: tổng nhiễu của class đó
+      noise_inputs[class_id]: noise (từ file hoặc zero)
     """
     base_inputs = {}
     noise_inputs = {}
@@ -240,8 +241,7 @@ def init_synthetic_images(num_class, dataset, dataset_name, init_path, known_cla
     base_dir = f"{init_path}/base"
     noise_dir = f"{init_path}/noise"
 
-    # Lấy dataset thật nếu là ConcatDataset
-    if hasattr(dataset, 'datasets'):
+    if hasattr(dataset, "datasets"):
         real_dataset = dataset.datasets[0]
     else:
         real_dataset = dataset
@@ -249,12 +249,10 @@ def init_synthetic_images(num_class, dataset, dataset_name, init_path, known_cla
     for class_id in range(num_class):
         base_path = f"{base_dir}/class{class_id:03d}_base.jpg"
 
-        # --- 1️⃣ Load hoặc tạo ảnh base
         if os.path.exists(base_path):
             img = Image.open(base_path).convert("L" if dataset_name == "etc_256" else "RGB")
             base_img = transforms.ToTensor()(img).unsqueeze(0).to("cuda")
         else:
-            # chọn ảnh thật đúng class nếu có
             class_indices = [i for i, (_, _, lbl) in enumerate(real_dataset) if lbl == class_id]
             if len(class_indices) > 0:
                 idx = random.choice(class_indices)
@@ -266,16 +264,22 @@ def init_synthetic_images(num_class, dataset, dataset_name, init_path, known_cla
             base_img = img.unsqueeze(0).to("cuda")
             os.makedirs(os.path.dirname(base_path), exist_ok=True)
             save_image(base_img, base_path)
-        
+
         base_inputs[class_id] = base_img.detach().clone()
 
-        # --- 2️⃣ Cộng nhiễu từ các task trước
-        total_noise = torch.zeros_like(base_img)
-        for t in range(1, cur_task):
-            noise_path = f"{noise_dir}/task{t:02d}/class{class_id:03d}_noise.pt"
+        if class_id < known_classes and cur_task >= 1:
+            last_task = cur_task - 1
+            noise_path = f"{noise_dir}/task{last_task:02d}/class{class_id:03d}_noise.pt"
             if os.path.exists(noise_path):
-                total_noise += torch.load(noise_path, map_location="cuda")
-        
+                total_noise = torch.load(noise_path, map_location="cuda")
+                print(f"[LOAD NOISE] Class {class_id}: loaded noise from {noise_path}")
+            else:
+                total_noise = torch.zeros_like(base_img)
+                print(f"[WARN] Missing noise file for class {class_id}, fallback to zero.")
+        else:
+            total_noise = torch.zeros_like(base_img)
+            print(f"[NEW NOISE] Class {class_id}: initialized ZERO noise (new class).")
+
         noise_inputs[class_id] = total_noise.detach().clone()
 
     return base_inputs, noise_inputs

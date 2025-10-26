@@ -265,7 +265,7 @@ class concept1(BaseLearner):
         import os
         import shutil
 
-        syn_root = "./syn"
+        syn_root = "./syn/combined"
         keep_per_class = self.samples_per_class
         if not os.path.exists(syn_root):
             return
@@ -290,7 +290,7 @@ class concept1(BaseLearner):
                     except Exception as e:
                         print(f"[WARN] Could not delete {f}: {e}")
 
-        print(f"🧹 Cleaned synthetic folder: kept {keep_per_class} per class, deleted {total_deleted} extra files.")
+        print(f"Cleaned synthetic folder: kept {keep_per_class} per class, deleted {total_deleted} extra files.")
     def generate_synthetic_data(self, ipc, train_dataset):   
         print(f"Generating synthetic data... (ipc={ipc}, total_classes={self._total_classes})")
 
@@ -313,12 +313,13 @@ class concept1(BaseLearner):
             print(f"   - Model[{idx}]: {model_name} | device={next(model.parameters()).device}")
 
         total_syn_count = 0
-        init_inputs = init_synthetic_images(
+        base_inputs, noise_inputs = init_synthetic_images(
             num_class=self._total_classes,
             dataset=train_dataset,
             dataset_name=dataset_name,
             init_path='./syn',
-            known_classes=self._known_classes
+            known_classes=self._known_classes,
+            cur_task=self._cur_task
         )
         for ipc_id in range(ipc):
             syn = infer_gen(
@@ -329,7 +330,8 @@ class concept1(BaseLearner):
                 lr = distill_lr,  
                 init_path='./syn', 
                 ipc_init=ipc_init, 
-                init_inputs=init_inputs,
+                base_inputs=base_inputs,
+                noise_inputs=noise_inputs,
                 store_best_images = True,
                 dataset_name=dataset_name)
             
