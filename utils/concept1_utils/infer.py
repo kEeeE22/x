@@ -68,10 +68,8 @@ def infer_gen(
     for class_id in range(num_class):
         targets = torch.LongTensor([class_id]).to("cuda")
 
-        # 1️⃣ Load ảnh base
         base_img = base_inputs[class_id].to("cuda")
 
-        # 2️⃣ Khởi tạo nhiễu
         prev_noise = noise_inputs.get(class_id, None)
 
         # nếu có noise cũ → dùng lại, nếu không → khởi tạo random
@@ -111,11 +109,9 @@ def infer_gen(
             if it % save_every == 0:
                 print(f"[Class {class_id}] Iter {it}: CE={loss_ce.item():.3f}, BN={loss_r_bn.item():.3f}")
 
-        # 3️⃣ Lưu nhiễu mới
         final_noise = uni_perb.detach().clone().cpu()
         torch.save(final_noise, f"{noise_dir}/class{class_id:03d}_noise.pt")
 
-        # 4️⃣ Lưu ảnh synthetic tổng hợp
         final_inputs = (base_img + uni_perb).detach().clone()
         final_img_vis = denormalize_image(final_inputs, dataset_name)
 

@@ -415,7 +415,7 @@ class BaseLearner(object):
     #                         print(f"[WARN] Could not delete {f}: {e}")
 
     #         print(f"🧹 Cleaned synthetic folder: kept {keep_per_class} per class, deleted {total_deleted} extra files.")
-    def generate_synthetic_data(self, ipc, train_dataset, M=2, distill_epochs=201, distill_lr=0.01, dataset_name="etc_256"):   
+    def generate_synthetic_data(self, ipc, train_dataset, M=2, distill_epochs=201, distill_lr=0.001, dataset_name="etc_256"):   
             print(f"Generating synthetic data... (ipc={ipc}, total_classes={self._total_classes})")
 
             ipc_init = int(ipc / M / self._total_classes)
@@ -437,15 +437,16 @@ class BaseLearner(object):
                 print(f"   - Model[{idx}]: {model_name} | device={next(model.parameters()).device}")
 
             total_syn_count = 0
-            init_inputs = init_synthetic_images(
+            base_inputs, noise_inputs = init_synthetic_images(
                 num_class=self._total_classes,
                 dataset=train_dataset,
                 dataset_name=dataset_name,
                 init_path='./syn',
-                known_classes=self._known_classes
+                known_classes=self._known_classes,
+                cur_task=self._cur_task
             )
             for ipc_id in range(ipc):
-                syn= infer_gen(
+                syn = infer_gen(
                     model_lists = self.model_list, 
                     ipc_id = ipc_id, 
                     num_class = self._total_classes, 
@@ -453,7 +454,8 @@ class BaseLearner(object):
                     lr = distill_lr,  
                     init_path='./syn', 
                     ipc_init=ipc_init, 
-                    init_inputs=init_inputs,
+                    base_inputs=base_inputs,
+                    noise_inputs=noise_inputs,
                     store_best_images = True,
                     dataset_name=dataset_name)
                 

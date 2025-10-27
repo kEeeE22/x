@@ -55,7 +55,7 @@ class concept1(BaseLearner):
         self._known_classes = self._total_classes
         logging.info("Exemplar size: {}".format(self.exemplar_size))
 
-        self._cleanup_synthetic_folder()
+        # self._cleanup_synthetic_folder()
 
     def incremental_train(self, data_manager):
         self._cur_task += 1
@@ -100,8 +100,8 @@ class concept1(BaseLearner):
         if len(self._multiple_gpus) > 1:
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
-        self.generate_synthetic_data(self.samples_per_class, train_dataset)
-        # self._construct_exemplar_random(data_manager, 10)
+        self.generate_synthetic_data(ipc, train_dataset)
+        # self._construct_exemplar_random(data_manager, self.samples_per_class)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
 
