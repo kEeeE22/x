@@ -13,14 +13,14 @@ from models.base import BaseLearner
 from utils.toolkit import target2onehot, tensor2numpy
 from utils.concept1_utils.utils import SyntheticImageFolder
 
-init_epoch = 150
+init_epoch = 2
 init_lr = 0.001
 init_milestones = [60, 120, 170]
 init_lr_decay = 0.01
 init_weight_decay = 0.0005
 
 
-epochs = 150
+epochs = 2
 lrate = 0.001
 milestones = [40, 70]
 lrate_decay = 0.01
@@ -30,8 +30,8 @@ num_workers = 8
 
 #distill params
 ipc=10
-M=2
-distill_epochs=201
+M=1
+distill_epochs=101
 distill_lr=0.001
 dataset_name="etc_256"
 
