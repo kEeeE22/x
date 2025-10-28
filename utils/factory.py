@@ -35,5 +35,8 @@ def get_model(model_name, args):
     elif name == "replaywinfer":
         from models.replaywinfer import Replay_winfer
         return Replay_winfer(args)
+    elif name == "derwinfer":
+        from models.derwinfer import DER_winfer
+        return DER_winfer(args)
     else:
         assert 0

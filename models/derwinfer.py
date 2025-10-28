@@ -37,7 +37,7 @@ distill_lr=0.001
 M=1
 ipc=10
 
-class DER(BaseLearner):
+class DER_winfer(BaseLearner):
     def __init__(self, args):
         super().__init__(args)
         self._network = DERNet(args, False)
