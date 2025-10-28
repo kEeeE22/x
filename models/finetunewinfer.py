@@ -30,7 +30,7 @@ num_workers = 8
 
 #distill params
 ipc=10
-M=1
+
 distill_epochs=101
 distill_lr=0.001
 dataset_name="etc_256"
@@ -42,6 +42,7 @@ class Finetune_winfer(BaseLearner):
 
     def after_task(self):
         self._known_classes = self._total_classes
+        self._old_network = self._network.copy().freeze()
 
     def incremental_train(self, data_manager):
         self._cur_task += 1
@@ -49,6 +50,8 @@ class Finetune_winfer(BaseLearner):
             self._cur_task
         )
         self._network.update_fc(self._total_classes)
+        if self._old_network is not None:
+            self._old_network.update_fc(self._total_classes)
         logging.info(
             "Learning on {}-{}".format(self._known_classes, self._total_classes)
         )
@@ -85,6 +88,9 @@ class Finetune_winfer(BaseLearner):
         self._train(self.train_loader, self.test_loader)
 
         self.model_list = [self._network]
+        if self._old_network is not None:
+            self.model_list.append(self._old_network)
+        M = len(self.model_list)
         self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr=distill_lr, dataset_name=dataset_name)
         
         if len(self._multiple_gpus) > 1:
