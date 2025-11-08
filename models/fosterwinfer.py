@@ -5,19 +5,32 @@ import torch
 from torch import nn
 from torch import optim
 from torch.nn import functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 from torchvision import transforms
 from models.base import BaseLearner
 from utils.inc_net import FOSTERNet
 from utils.toolkit import count_parameters, target2onehot, tensor2numpy
 
-from utils.concept1_utils.utils import SyntheticImageFolder
+from utils.concept1_utils.infer import infer_gen
+from utils.concept1_utils.utils import SyntheticImageFolder, init_synthetic_images
 # Please refer to https://github.com/G-U-N/ECCV22-FOSTER for the full source code to reproduce foster.
 
 EPSILON = 1e-8
 
+dataset_name = 'etc_256'
 
-class FOSTER(BaseLearner):
+#distill hyperparameters
+distill_lr = 0.01
+first_bn_multiplier = 1.0
+r_bn = 1.0
+jitter = 0
+ipc_start = 0
+M = 1
+distill_batch_size = 64
+distill_epochs = 101
+ipc=10
+
+class FOSTER_winfer(BaseLearner):
     def __init__(self, args):
         super().__init__(args)
         self.args = args
@@ -61,12 +74,25 @@ class FOSTER(BaseLearner):
             "Trainable params: {}".format(count_parameters(self._network, True))
         )
 
-        train_dataset = data_manager.get_dataset(
+        base_dataset = data_manager.get_dataset(
             np.arange(self._known_classes, self._total_classes),
             source="train",
             mode="train",
             appendent=self._get_memory(),
         )
+        syn_dataset = SyntheticImageFolder(
+            syn_root="./syn/combined",
+            dataset_name=dataset_name,
+            known_classes=self._known_classes,
+            cur_task=self._cur_task,
+            transform=transforms.Compose([*data_manager._train_trsf, *data_manager._common_trsf])
+        )
+        if len(syn_dataset) > 0:
+            train_dataset = ConcatDataset([base_dataset, syn_dataset])
+            print(f"Combined real + synthetic datasets: {len(base_dataset)} real, {len(syn_dataset)} synthetic samples.")
+        else:
+            train_dataset = base_dataset
+            print("No synthetic data found. Using only real samples.")
         self.train_loader = DataLoader(
             train_dataset,
             batch_size=self.args["batch_size"],
@@ -87,6 +113,7 @@ class FOSTER(BaseLearner):
         if len(self._multiple_gpus) > 1:
             self._network = nn.DataParallel(self._network, self._multiple_gpus)
         self._train(self.train_loader, self.test_loader)
+        self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset)
         self.build_rehearsal_memory(data_manager, self.samples_per_class)
         if len(self._multiple_gpus) > 1:
             self._network = self._network.module
@@ -409,7 +436,61 @@ class FOSTER(BaseLearner):
         return -1 * torch.mul(soft, pred).sum() / pred.shape[0]
 
 
+    def generate_synthetic_data(self, ipc, train_dataset):   
+            print(f"Generating synthetic data... (ipc={ipc}, total_classes={self._total_classes})")
+
+            ipc_init = int(ipc / M / self._total_classes)
+            ipc_end = ipc_init * (M + 1)
+            
+            self.model_list = []
+            self.model_list.append(self._network)
+            # if self._old_network is not None:
+            #     self.model_list.append(self._old_network)
+            for model in self.model_list:
+                model.eval()
+                model.to("cuda")
+
+            torch.cuda.empty_cache()
+            #debug
+            print(f"[DEBUG] Task {self._cur_task}: model_list contains {len(self.model_list)} model(s)")
+            for idx, model in enumerate(self.model_list):
+                model_name = type(model).__name__
+                print(f"   - Model[{idx}]: {model_name} | device={next(model.parameters()).device}")
+
+            total_syn_count = 0
+            base_inputs, noise_inputs = init_synthetic_images(
+                num_class=self._total_classes,
+                dataset=train_dataset,
+                dataset_name=dataset_name,
+                init_path='./syn',
+                known_classes=self._known_classes,
+                cur_task=self._cur_task
+            )
+            for ipc_id in range(ipc):
+                syn = infer_gen(
+                    model_lists = self.model_list, 
+                    ipc_id = ipc_id, 
+                    num_class = self._total_classes, 
+                    iteration = distill_epochs, 
+                    lr = distill_lr,  
+                    init_path='./syn', 
+                    ipc_init=ipc_init, 
+                    base_inputs=base_inputs,
+                    noise_inputs=noise_inputs,
+                    store_best_images = True,
+                    dataset_name=dataset_name)
+                
+                # self.synthetic_data.extend(syn)
+                # self.ufc.extend(aufc)
+                
+                #debug 
+                syn_count = len(syn) if syn is not None else 0
+                total_syn_count += syn_count
+            # if self._old_network is not None:
+            #     self._old_network.to('cpu')
+            #     torch.cuda.empty_cache()
+            print(f"Total synthetic samples generated this task: {total_syn_count}")
 def _KD_loss(pred, soft, T):
-    pred = torch.log_softmax(pred / T, dim=1)
-    soft = torch.softmax(soft / T, dim=1)
-    return -1 * torch.mul(soft, pred).sum() / pred.shape[0]
+        pred = torch.log_softmax(pred / T, dim=1)
+        soft = torch.softmax(soft / T, dim=1)
+        return -1 * torch.mul(soft, pred).sum() / pred.shape[0]

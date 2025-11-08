@@ -344,12 +344,7 @@ class concept1(BaseLearner):
         if self._old_network is not None:
             self._old_network.to('cpu')
             torch.cuda.empty_cache()
-        #     print(f"   🔄 [DEBUG] Added {syn_count} synthetic samples and {aufc_count} activation features.")
-        #     print(f"   📊 [DEBUG] Current totals → syn: {len(self.synthetic_data)}, aufc: {len(self.ufc)}")
-        # print("\n✅ [DEBUG] Synthetic data generation complete.")
         print(f"   → Total synthetic samples generated this task: {total_syn_count}")
-        # print(f"   → Cumulative synthetic data length: {len(self.synthetic_data)}")
-        # print(f"   → Cumulative aufc length: {len(self.ufc)}\n")
 
 def _KD_loss(pred, soft, T):
     pred = torch.log_softmax(pred / T, dim=1)

@@ -384,47 +384,16 @@ class BaseLearner(object):
 
         self._class_means = _class_means
 
-    # def _cleanup_synthetic_folder(self):
-    #         """Giữ lại đúng số ảnh mỗi class theo samples_per_class."""
-    #         import os
-    #         import shutil
-
-    #         syn_root = "./syn"
-    #         keep_per_class = self.samples_per_class
-    #         if not os.path.exists(syn_root):
-    #             return
-
-    #         total_deleted = 0
-    #         for class_dir in sorted(os.listdir(syn_root)):
-    #             if not class_dir.startswith("new"):
-    #                 continue
-    #             class_path = os.path.join(syn_root, class_dir)
-    #             if not os.path.isdir(class_path):
-    #                 continue
-
-    #             jpg_files = sorted(
-    #                 [f for f in os.listdir(class_path) if f.endswith(".jpg")]
-    #             )
-    #             if len(jpg_files) > keep_per_class:
-    #                 to_delete = jpg_files[keep_per_class:]
-    #                 for f in to_delete:
-    #                     try:
-    #                         os.remove(os.path.join(class_path, f))
-    #                         total_deleted += 1
-    #                     except Exception as e:
-    #                         print(f"[WARN] Could not delete {f}: {e}")
-
-    #         print(f"🧹 Cleaned synthetic folder: kept {keep_per_class} per class, deleted {total_deleted} extra files.")
-    def generate_synthetic_data(self, ipc, train_dataset, M=2, distill_epochs=201, distill_lr=0.001, dataset_name="etc_256"):   
+    def generate_synthetic_data(self, ipc, train_dataset, M, distill_epochs, distill_lr, dataset_name, path):   
             print(f"Generating synthetic data... (ipc={ipc}, total_classes={self._total_classes})")
 
             ipc_init = int(ipc / M / self._total_classes)
             ipc_end = ipc_init * (M + 1)
             
-            # self.model_list = []
-            # self.model_list.append(self._network)
-            # if self._old_network2 is not None:
-            #     self.model_list.append(self._old_network2)
+            self.model_list = []
+            self.model_list.append(self._network)
+            if self._old_network is not None and M == 2:
+                self.model_list.append(self._old_network)
             for model in self.model_list:
                 model.eval()
                 model.to("cuda")
@@ -434,14 +403,14 @@ class BaseLearner(object):
             print(f"[DEBUG] Task {self._cur_task}: model_list contains {len(self.model_list)} model(s)")
             for idx, model in enumerate(self.model_list):
                 model_name = type(model).__name__
-                print(f"   - Model[{idx}]: {model_name} | device={next(model.parameters()).device}")
+                print(f"Model[{idx}]: {model_name} | device={next(model.parameters()).device}")
 
             total_syn_count = 0
             base_inputs, noise_inputs = init_synthetic_images(
                 num_class=self._total_classes,
                 dataset=train_dataset,
                 dataset_name=dataset_name,
-                init_path='./syn',
+                init_path=path,
                 known_classes=self._known_classes,
                 cur_task=self._cur_task
             )
@@ -452,7 +421,7 @@ class BaseLearner(object):
                     num_class = self._total_classes, 
                     iteration = distill_epochs, 
                     lr = distill_lr,  
-                    init_path='./syn', 
+                    init_path=path, 
                     ipc_init=ipc_init, 
                     base_inputs=base_inputs,
                     noise_inputs=noise_inputs,
@@ -468,9 +437,4 @@ class BaseLearner(object):
             if self._old_network is not None:
                 self._old_network.to('cpu')
                 torch.cuda.empty_cache()
-            #     print(f"   🔄 [DEBUG] Added {syn_count} synthetic samples and {aufc_count} activation features.")
-            #     print(f"   📊 [DEBUG] Current totals → syn: {len(self.synthetic_data)}, aufc: {len(self.ufc)}")
-            # print("\n✅ [DEBUG] Synthetic data generation complete.")
-            print(f"   → Total synthetic samples generated this task: {total_syn_count}")
-            # print(f"   → Cumulative synthetic data length: {len(self.synthetic_data)}")
-            # print(f"   → Cumulative aufc length: {len(self.ufc)}\n")
+            print(f"Total synthetic samples generated this task: {total_syn_count}")

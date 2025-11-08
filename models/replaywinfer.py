@@ -37,6 +37,7 @@ M=1
 distill_epochs=201
 distill_lr=0.001 
 dataset_name="etc_256"
+path = './syn_replay'
 
 class Replay_winfer(BaseLearner):
     def __init__(self, args):
@@ -61,9 +62,10 @@ class Replay_winfer(BaseLearner):
             np.arange(self._known_classes, self._total_classes),
             source="train",
             mode="train",
+            appendent=self._get_memory(),
         )
         syn_dataset = SyntheticImageFolder(
-            syn_root="./syn/combined",
+            syn_root="./syn_replay/combined",
             dataset_name=dataset_name,
             known_classes=self._known_classes,
             cur_task=self._cur_task,
@@ -91,7 +93,7 @@ class Replay_winfer(BaseLearner):
         self._train(self.train_loader, self.test_loader)
 
         self.model_list = [self._network]
-        self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr=distill_lr, dataset_name=dataset_name)
+        self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr=distill_lr, dataset_name=dataset_name, path=path)
         
         self.build_rehearsal_memory(data_manager, self.samples_per_class)
         if len(self._multiple_gpus) > 1:

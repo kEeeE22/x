@@ -36,7 +36,7 @@ M=2
 distill_epochs=201
 distill_lr=0.01
 dataset_name="etc_256"
-
+path = './syn_icarl'
 class iCaRL_winfer(BaseLearner):
     def __init__(self, args):
         super().__init__(args)
@@ -97,7 +97,7 @@ class iCaRL_winfer(BaseLearner):
             self.model_list = [self._network, self._old_network2]
         else: 
             self.model_list = [self._network]
-        self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr =distill_lr, dataset_name=dataset_name)
+        self.generate_synthetic_data(ipc=ipc, train_dataset=train_dataset, M=M, distill_epochs=distill_epochs, distill_lr =distill_lr, dataset_name=dataset_name, path=path)
         
         self.build_rehearsal_memory(data_manager, self.samples_per_class)
         if len(self._multiple_gpus) > 1:

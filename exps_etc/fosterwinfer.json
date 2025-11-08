@@ -1,5 +1,5 @@
 {
-    "prefix": "cil",
+    "prefix": "foster",
     "dataset": "etc_256",
     "memory_size": 400,
     "memory_per_class": 20,
@@ -18,7 +18,7 @@
     "is_student_wa":false,
     "lambda_okd":1,
     "wa_value":1,
-    "init_epochs": 150,
+    "init_epochs": 120,
     "init_lr" : 0.001,
     "init_weight_decay" : 5e-4,
     "boosting_epochs" : 120,
